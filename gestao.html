@@ -620,11 +620,20 @@
     const usuario = document.getElementById('uUsuario').value.trim();
     const senha = document.getElementById('uSenha').value.trim();
     if (!usuario || !senha) { showToast('Preencha usuário e senha'); return; }
-    await addUser(usuario, senha);
-    document.getElementById('uUsuario').value = '';
-    document.getElementById('uSenha').value = '';
-    showToast('Usuário criado!');
-    await loadUsers();
+    try {
+      const result = await addUser(usuario, senha);
+      if (isRemoteConfigured() && (!result || result.ok === false)) {
+        showToast('Não salvou — atualize o código do Apps Script na planilha');
+        return;
+      }
+      document.getElementById('uUsuario').value = '';
+      document.getElementById('uSenha').value = '';
+      showToast('Usuário criado!');
+      await loadUsers();
+    } catch (e) {
+      console.error(e);
+      showToast('Erro ao salvar — veja o console (F12)');
+    }
   }
 
   async function removeUser(id) {

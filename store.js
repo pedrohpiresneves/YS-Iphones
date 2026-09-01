@@ -271,6 +271,7 @@ async function addUser(usuario, senha) {
   const list = getLocalUsers();
   list.push({ id: "u" + Math.random().toString(36).slice(2, 10), usuario, senha, criadoEm: new Date().toISOString() });
   setLocalUsers(list);
+  return { ok: true };
 }
 
 async function deleteUser(id) {
