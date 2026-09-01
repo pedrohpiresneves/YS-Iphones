@@ -213,6 +213,27 @@
     display:flex; align-items:center; justify-content:center; position:relative;
   }
   .prod-thumb svg{width:40%; stroke:var(--silver-1); fill:none; stroke-width:1.3;}
+
+  .thumb-carousel{position:absolute; inset:0;}
+  .thumb-slide{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    opacity:0; transition:opacity 0.25s ease;
+  }
+  .thumb-slide.active{opacity:1;}
+  .thumb-nav{
+    position:absolute; top:50%; transform:translateY(-50%);
+    width:28px; height:28px; border-radius:50%; border:none;
+    background:rgba(0,0,0,0.45); color:#fff; font-size:16px; line-height:1;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; z-index:2;
+  }
+  .thumb-nav.prev{left:8px;}
+  .thumb-nav.next{right:8px;}
+  .thumb-dots{
+    position:absolute; bottom:8px; left:0; right:0;
+    display:flex; justify-content:center; gap:5px; z-index:2;
+  }
+  .thumb-dot{width:5px; height:5px; border-radius:50%; background:rgba(255,255,255,0.4);}
+  .thumb-dot.active{background:#fff;}
   .prod-thumb .badge{
     position:absolute; top:10px; left:10px; font-size:11px; font-weight:600;
     padding:3px 9px; border-radius:100px; background:var(--surface-2); color:var(--text-dim);
@@ -504,12 +525,32 @@ function productCardHtml(p) {
   const icon = ICONS[p.categoria] || '';
   const waText = 'Oi! Tenho interesse no ' + p.nome + ' (' + p.condicao.toLowerCase() + ').';
   const waLink = 'https://api.whatsapp.com/send?phone=5583996910909&force=true&text=' + encodeURIComponent(waText);
-  const photoHtml = p.foto
-    ? '<img src="' + p.foto + '" alt="' + p.nome + '" style="width:100%;height:100%;object-fit:cover;">'
-    : icon;
+  const fotos = Array.isArray(p.fotos) ? p.fotos.filter(Boolean) : (p.foto ? [p.foto] : []);
+
+  let mediaHtml;
+  if (fotos.length === 0) {
+    mediaHtml = icon;
+  } else if (fotos.length === 1) {
+    mediaHtml = '<img src="' + fotos[0] + '" alt="' + p.nome + '" style="width:100%;height:100%;object-fit:cover;">';
+  } else {
+    const slides = fotos.map((url, i) =>
+      '<img src="' + url + '" alt="' + p.nome + '" class="thumb-slide' + (i === 0 ? ' active' : '') + '">'
+    ).join('');
+    const dots = fotos.map((_, i) =>
+      '<span class="thumb-dot' + (i === 0 ? ' active' : '') + '"></span>'
+    ).join('');
+    mediaHtml =
+      '<div class="thumb-carousel" data-index="0">' +
+        slides +
+        '<button type="button" class="thumb-nav prev" aria-label="Foto anterior">‹</button>' +
+        '<button type="button" class="thumb-nav next" aria-label="Próxima foto">›</button>' +
+        '<div class="thumb-dots">' + dots + '</div>' +
+      '</div>';
+  }
+
   return '' +
     '<div class="prod-card" id="' + anchorId + '">' +
-      '<div class="prod-thumb"><span class="badge">' + p.condicao + '</span>' + photoHtml + '</div>' +
+      '<div class="prod-thumb"><span class="badge">' + p.condicao + '</span>' + mediaHtml + '</div>' +
       '<div class="prod-body">' +
         '<h4>' + p.nome + '</h4>' +
         '<div class="price">' + formatPrice(p.preco) + '<small>ou em até 18x</small></div>' +
@@ -523,8 +564,7 @@ function productCardHtml(p) {
     '</div>';
 }
 
-async function renderCatalog() {
-  const produtos = (await fetchProducts()).filter(p => p.ativo !== false);
+function paintCatalog(produtos) {
   CATEGORIAS.forEach(cat => {
     const grid = document.getElementById('grid-' + cat.id);
     if (!grid) return;
@@ -536,8 +576,31 @@ async function renderCatalog() {
   document.querySelectorAll('.share-btn').forEach(btn => {
     btn.addEventListener('click', () => shareProduct(btn.dataset.anchor, btn.dataset.name));
   });
+  document.querySelectorAll('.thumb-nav').forEach(btn => {
+    btn.addEventListener('click', () => moveCarousel(btn));
+  });
+}
+
+async function renderCatalog() {
+  const cached = readCache('produtos');
+  if (cached) paintCatalog(cached.filter(p => p.ativo !== false));
+
+  const produtos = (await fetchProducts());
+  writeCache('produtos', produtos);
+  paintCatalog(produtos.filter(p => p.ativo !== false));
 }
 renderCatalog();
+
+function moveCarousel(navBtn) {
+  const carousel = navBtn.closest('.thumb-carousel');
+  const slides = carousel.querySelectorAll('.thumb-slide');
+  const dots = carousel.querySelectorAll('.thumb-dot');
+  let idx = Number(carousel.dataset.index);
+  idx = navBtn.classList.contains('next') ? (idx + 1) % slides.length : (idx - 1 + slides.length) % slides.length;
+  slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+  dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+  carousel.dataset.index = idx;
+}
 </script>
 
 </body>

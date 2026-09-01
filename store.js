@@ -290,3 +290,24 @@ async function validateLogin(usuario, senha) {
 function formatPrice(n) {
   return "R$ " + Number(n).toLocaleString("pt-BR", { minimumFractionDigits: 0 });
 }
+
+/* ---------- cache local (evita tela vazia enquanto carrega) ----------
+   Guarda a última resposta boa da planilha no aparelho, pra mostrar na
+   hora ao reabrir a página, enquanto busca a versão atualizada por trás. */
+
+function readCache(key) {
+  try {
+    const raw = localStorage.getItem("ys_cache_" + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeCache(key, data) {
+  try {
+    localStorage.setItem("ys_cache_" + key, JSON.stringify(data));
+  } catch (e) {
+    // sem problema se falhar — é só um atalho visual
+  }
+}
