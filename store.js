@@ -6,7 +6,8 @@
    1. Crie uma Planilha Google nova.
    2. Na primeira aba, renomeie para "Produtos" e coloque na
       linha 1 exatamente estes cabeçalhos, nesta ordem:
-      id | nome | categoria | condicao | preco | estoque | foto | ativo | criadoEm
+      id | nome | categoria | condicao | preco | estoque | fotos | ativo | criadoEm
+      (a coluna "fotos" guarda vários links separados por vírgula)
    3. Extensões > Apps Script, apague o conteúdo e cole o código
       do arquivo apps-script.gs (enviado junto).
    4. Implantar > Nova implantação > tipo "App da Web".
@@ -16,6 +17,10 @@
       abaixo em CONFIG.SCRIPT_URL, entre aspas.
    6. Suba o site de novo. Pronto — os dois arquivos passam a
       usar a planilha como banco de dados.
+      (as abas "Vendas" e "Usuarios" são criadas sozinhas na
+      primeira vez que alguém usar a gestão — não precisa criar
+      na mão. A aba "Usuarios" já nasce com o usuário padrão
+      admin / 1234, que você pode trocar direto na gestão.)
 
    Enquanto CONFIG.SCRIPT_URL estiver vazio, o site funciona em
    MODO LOCAL: os produtos ficam salvos só neste navegador
@@ -77,7 +82,7 @@ function prod(nome, categoria, condicao, preco, estoque) {
   return {
     id: "p" + Math.random().toString(36).slice(2, 10),
     nome, categoria, condicao, preco, estoque,
-    foto: "",
+    fotos: [],
     ativo: true,
     criadoEm: new Date().toISOString(),
   };
@@ -213,6 +218,72 @@ async function remoteRequest(payload) {
     body: JSON.stringify(payload),
   });
   return res.json();
+}
+
+/* ---------- usuários de acesso à gestão ----------
+   AVISO: como o site é hospedado de forma estática (GitHub
+   Pages), isso é uma trava simples para uso do dia a dia — não
+   é uma autenticação de verdade como a de um sistema com
+   servidor. As senhas ficam visíveis para quem souber olhar o
+   código ou a planilha. Não reutilize senhas importantes aqui. */
+
+const LOCAL_USERS_KEY = "ys_iphone_usuarios_v1";
+
+function seedUsersIfEmpty() {
+  const existing = localStorage.getItem(LOCAL_USERS_KEY);
+  if (existing) return;
+  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify([
+    { id: "u" + Math.random().toString(36).slice(2, 10), usuario: "admin", senha: "1234", criadoEm: new Date().toISOString() },
+  ]));
+}
+
+function getLocalUsers() {
+  seedUsersIfEmpty();
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_USERS_KEY)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function setLocalUsers(list) {
+  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(list));
+}
+
+async function fetchUsers() {
+  if (isRemoteConfigured()) {
+    try {
+      const res = await fetch(CONFIG.SCRIPT_URL);
+      const data = await res.json();
+      return data.usuarios || [];
+    } catch (e) {
+      console.error("Falha ao buscar usuários da planilha, usando modo local.", e);
+      return getLocalUsers();
+    }
+  }
+  return getLocalUsers();
+}
+
+async function addUser(usuario, senha) {
+  if (isRemoteConfigured()) {
+    return remoteRequest({ action: "createUser", usuario: { usuario, senha } });
+  }
+  const list = getLocalUsers();
+  list.push({ id: "u" + Math.random().toString(36).slice(2, 10), usuario, senha, criadoEm: new Date().toISOString() });
+  setLocalUsers(list);
+}
+
+async function deleteUser(id) {
+  if (isRemoteConfigured()) {
+    return remoteRequest({ action: "deleteUser", usuario: { id } });
+  }
+  const list = getLocalUsers().filter((u) => u.id !== id);
+  setLocalUsers(list);
+}
+
+async function validateLogin(usuario, senha) {
+  const users = await fetchUsers();
+  return users.some((u) => u.usuario === usuario && u.senha === senha);
 }
 
 function formatPrice(n) {
