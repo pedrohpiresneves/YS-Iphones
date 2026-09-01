@@ -29,7 +29,7 @@
 ============================================================ */
 
 const CONFIG = {
-  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzNsvUIYJxvKIVmpFVKFW-CvS2_9PxIC8gDoDyTvbdwro5yueA06a-LYT-WXwthk-fiBg/exec",
+  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbzNsvUIYJxvKlVmpFVKFW-CvS2_9PxIC8gDoDyTvbdwro5yueA06a-LYT-WXwthk-fiBg/exec",
 };
 
 const LOCAL_KEY = "ys_iphone_produtos_v1";
