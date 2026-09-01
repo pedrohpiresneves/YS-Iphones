@@ -342,7 +342,13 @@ async function deleteUser(id) {
 
 async function validateLogin(usuario, senha) {
   const users = await fetchUsers();
-  return users.some((u) => u.usuario === usuario && u.senha === senha);
+  // Compara como texto: o Google Sheets às vezes guarda a senha
+  // como número (1234 em vez de "1234"), o que fazia a
+  // comparação falhar silenciosamente mesmo com tudo certo.
+  return users.some((u) =>
+    String(u.usuario).trim() === usuario.trim() &&
+    String(u.senha).trim() === String(senha).trim()
+  );
 }
 
 function formatPrice(n) {
