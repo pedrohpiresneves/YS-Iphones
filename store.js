@@ -101,13 +101,58 @@ function setLocalProducts(list) {
   localStorage.setItem(LOCAL_KEY, JSON.stringify(list));
 }
 
+/* ---------- ponte com o Apps Script via JSONP ----------
+   Usamos JSONP em vez de fetch() comum para LER dados porque o
+   Apps Script nem sempre devolve o cabeçalho que o navegador
+   exige para leituras via fetch entre domínios diferentes
+   (isso trava com um erro de "CORS" no console, mesmo com a
+   implantação certa como "Qualquer pessoa"). JSONP contorna
+   isso carregando a resposta como uma tag <script>, que não
+   tem essa restrição. */
+
+let _remotePromise = null;
+
+function invalidateRemoteCache() {
+  _remotePromise = null;
+}
+
+function jsonp(url) {
+  return new Promise((resolve, reject) => {
+    const callbackName = "ys_jsonp_" + Math.random().toString(36).slice(2);
+    const script = document.createElement("script");
+    const cleanup = () => {
+      delete window[callbackName];
+      script.remove();
+    };
+    window[callbackName] = (data) => {
+      cleanup();
+      resolve(data);
+    };
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Falha ao carregar dados da planilha (JSONP)."));
+    };
+    script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + callbackName;
+    document.body.appendChild(script);
+  });
+}
+
+function fetchRemoteAll() {
+  if (!_remotePromise) {
+    _remotePromise = jsonp(CONFIG.SCRIPT_URL).catch((err) => {
+      _remotePromise = null;
+      throw err;
+    });
+  }
+  return _remotePromise;
+}
+
 /* ---------- API pública ---------- */
 
 async function fetchProducts() {
   if (isRemoteConfigured()) {
     try {
-      const res = await fetch(CONFIG.SCRIPT_URL);
-      const data = await res.json();
+      const data = await fetchRemoteAll();
       return data.produtos || [];
     } catch (e) {
       console.error("Falha ao buscar produtos da planilha, usando modo local.", e);
@@ -198,8 +243,7 @@ async function registerSale(produto, precoVenda) {
 async function fetchSales() {
   if (isRemoteConfigured()) {
     try {
-      const res = await fetch(CONFIG.SCRIPT_URL);
-      const data = await res.json();
+      const data = await fetchRemoteAll();
       return data.vendas || [];
     } catch (e) {
       console.error("Falha ao buscar vendas da planilha, usando modo local.", e);
@@ -211,13 +255,28 @@ async function fetchSales() {
 
 // Truque necessário porque o Apps Script não responde bem a
 // pré-verificações CORS: manda o corpo como texto simples.
+// Mesma limitação de CORS explicada acima também afeta o envio
+// (criar/editar/excluir/vender). Aqui usamos mode "no-cors": o
+// pedido chega certinho no Apps Script e é processado do mesmo
+// jeito, só que o navegador não deixa a gente LER a resposta.
+// Por isso tratamos como sucesso "otimista" e sempre buscamos
+// os dados de novo em seguida (invalidateRemoteCache) para
+// confirmar visualmente o que realmente ficou salvo.
 async function remoteRequest(payload) {
-  const res = await fetch(CONFIG.SCRIPT_URL, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(payload),
-  });
-  return res.json();
+  try {
+    await fetch(CONFIG.SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    });
+    return { ok: true };
+  } catch (e) {
+    console.error("Falha ao enviar dados para a planilha.", e);
+    return { ok: false, error: String(e) };
+  } finally {
+    invalidateRemoteCache();
+  }
 }
 
 /* ---------- usuários de acesso à gestão ----------
@@ -253,8 +312,7 @@ function setLocalUsers(list) {
 async function fetchUsers() {
   if (isRemoteConfigured()) {
     try {
-      const res = await fetch(CONFIG.SCRIPT_URL);
-      const data = await res.json();
+      const data = await fetchRemoteAll();
       return data.usuarios || [];
     } catch (e) {
       console.error("Falha ao buscar usuários da planilha, usando modo local.", e);
